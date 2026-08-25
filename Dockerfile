@@ -53,6 +53,13 @@ RUN go install gitlab.com/gitlab-org/cli/cmd/glab@latest \
 # --- OpenCode coding agent
 RUN npm install -g opencode-ai
 
+# Static, generic system prompt — the same for every task, so it's
+# baked into the image rather than passed through Worker/the task
+# payload. Project-specific instructions still come from the project's
+# own AGENTS.md, read directly by the agent from the mounted repo.
+RUN mkdir -p /etc/jiffy
+COPY system-prompt.md /etc/jiffy/system-prompt.md
+
 WORKDIR /workspace
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

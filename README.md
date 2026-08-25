@@ -27,13 +27,28 @@ language-dedicated sandbox (see the Worker repo's ADR, item 11,
      the code agent's own judgment; reliably parsing free text isn't a
      job for a shell script.
   3. The image's pinned default otherwise.
+- **The agent reads its own instructions from disk.** Rather than
+  reading file content into a shell variable and passing it as CLI
+  text (which would depend on unconfirmed `opencode` CLI details), the
+  entrypoint's `opencode run` prompt is just a short pointer: "read
+  your role from `/etc/jiffy/system-prompt.md`, then read the task from
+  `$JIFFY_TASK_FILE`." The agent uses its own file tools to read both.
+  This sidesteps any CLI argv-size or flag ambiguity entirely — there's
+  no length limit to worry about, since the actual task content never
+  passes through the shell or the CLI invocation at all.
+- **`system-prompt.md` is a fixed, generic role description** — "you're
+  a developer, read the code carefully, complete the task fully," the
+  same for every task — baked into the image since it never varies.
+  This is separate from a project's own `AGENTS.md` (project-specific
+  conventions, read directly by the agent from the mounted repo).
 
 ## Layout
 
 - `Dockerfile` — the image itself
 - `entrypoint.sh` — version resolution, pre-setup script, agent
-  invocation, result reporting (see inline comments for the exact flow
-  and a couple of open questions marked TODO)
+  invocation, result reporting (see inline comments for the exact flow)
+- `system-prompt.md` — the fixed, generic system prompt baked into the
+  image at `/etc/jiffy/system-prompt.md`
 
 ## Environment variables (set by Worker)
 
@@ -45,15 +60,15 @@ language-dedicated sandbox (see the Worker repo's ADR, item 11,
 | `OPEN_API_BASE_URL` / `OPEN_API_KEY` | Optional LLM provider settings, forwarded through if the operator configured `SANDBOX_ENV_PASSTHROUGH` on Worker |
 | `OPENCODE_MODEL` | Optional `provider/model` override; if unset, OpenCode's own `opencode.json` default applies |
 
-## Known open points (verify against the actual installed OpenCode version)
+The system prompt is not passed via an environment variable — it's the
+static `/etc/jiffy/system-prompt.md` baked into the image (see Design).
 
-- `opencode run`'s exact non-interactive interface has been reported
-  differently across sources — some describe a `--file`/`-f` flag,
-  others describe the prompt as positional-only with no file/stdin
-  support. `entrypoint.sh` reads the full task file into a shell
-  variable and passes it as a single quoted argument to sidestep this,
-  but if `--file` is genuinely supported by the version in use, switch
-  to it for cleaner handling of very large task content.
+## Known open points
+
+- `system-prompt.md`'s exact wording is a reconstruction based on a
+  description of the previous system's prompt ("you're a developer,
+  read the code carefully, complete the task fully"), not a verbatim
+  recovery — adjust the wording as needed.
 - PR-URL extraction (grepping the latest commit message) is a
   placeholder heuristic, not a real contract with the agent yet.
 - `glab`/`tea` are installed via `go install ...@latest` rather than a

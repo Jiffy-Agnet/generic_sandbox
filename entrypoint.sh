@@ -7,9 +7,11 @@
 #   JIFFY_TASK_FILE   - path to the composed task content
 #   JIFFY_RESULT_FILE - path this script must write the JSON result to
 #
-# There is no separate system-prompt file: the project's own AGENTS.md
-# (if present, at the repo root) is what the agent reads for
-# project-specific instructions.
+# There is a fixed, generic system prompt baked into this image at
+# /etc/jiffy/system-prompt.md (see Step 3) — the agent's role
+# description, the same for every task. Project-specific instructions
+# are separate: the project's own AGENTS.md (if present, at the repo
+# root), which the agent reads directly from the mounted working copy.
 set -euo pipefail
 
 : "${JIFFY_REPO_DIR:?JIFFY_REPO_DIR is required}"
@@ -45,16 +47,14 @@ fi
 
 # --- Step 3: run the code agent.
 #
-# The task content is handed off via a file path, not stdin/CLI text
-# directly, to sidestep a real ambiguity in OpenCode's CLI: some docs
-# describe a `--file`/`-f` flag for `opencode run`, others describe the
-# prompt as a positional-argument-only, no-stdin interface. To be safe
-# regardless of which is accurate for the installed version, this reads
-# the full file content into a shell variable and passes it as a single
-# quoted positional argument — verify with `opencode run --help` in this
-# image and switch to --file if it's actually supported, for cleaner
-# handling of very large task content.
-task_content="$(cat "$JIFFY_TASK_FILE")"
+# Rather than reading file content into a shell variable and passing it
+# as CLI text (which depended on an unconfirmed opencode CLI detail —
+# see the previous revision of this file), the agent is simply told
+# where to find its instructions and reads them itself with its own
+# file tools. This sidesteps any CLI argv-size/flag question entirely.
+system_prompt_file=/etc/jiffy/system-prompt.md
+
+instruction="Read your operating instructions from ${system_prompt_file} and follow them. Then read the complete task from ${JIFFY_TASK_FILE} and execute it."
 
 model_args=()
 if [ -n "${OPENCODE_MODEL:-}" ]; then
@@ -62,7 +62,7 @@ if [ -n "${OPENCODE_MODEL:-}" ]; then
 fi
 
 success=true
-if ! opencode run "${model_args[@]}" "$task_content" > /tmp/opencode-output.log 2>&1; then
+if ! opencode run "${model_args[@]}" "$instruction" > /tmp/opencode-output.log 2>&1; then
   success=false
 fi
 report="$(tail -c 4000 /tmp/opencode-output.log || true)"
